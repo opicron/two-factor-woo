@@ -13,6 +13,10 @@
  * @package two-factor-woo
  */
 
+namespace Two_Factor_Woo;
+use Two_Factor_Core;
+
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -22,7 +26,7 @@ define( 'TWO_FACTOR_WOO_URI', untrailingslashit( plugin_dir_url( __FILE__ ) ) );
 
 require_once TWO_FACTOR_WOO_PATH . '/includes/class-plugin-loader.php';
 
-use Two_Factor_Woo\Inc\Plugin_Loader;
+use Two_Factor_Woo\Plugin_Loader;
 
 Plugin_Loader::load();
 
