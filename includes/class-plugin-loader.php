@@ -15,9 +15,6 @@ class Plugin_Loader {
 
 	public static function load()
 	{
-		// Register plugin assets
-		add_action( 'wp_enqueue_scripts', [self::class, 'register_assets'] );
-
 		// add init action
 		add_action( 'init', array( self::class, 'init' ), 11 );
 
@@ -25,25 +22,7 @@ class Plugin_Loader {
 		add_action( 'init', [self::class,'woo_add_two_factor_endpoint'] );
 	}
 
-	public static function register_assets()
-	{
-		wp_register_script(
-			'two-factor-woo',
-			TWO_FACTOR_WOO_URI . '/assets/two-factor-woo.js',
-			array(),
-			filemtime( TWO_FACTOR_WOO_PATH . '/assets/two-factor-woo.js' ),
-			array( 'in_footer' => true )
-		);
 
-		// Localize the AJAX URL
-		// do we need to add a nonce?
-		wp_localize_script('two-factor-woo', 'WC_2FA', [
-			'ajax_url' => admin_url('admin-ajax.php?action=wc_2fa_login_check'),
-			//'nonce'    => wp_create_nonce('wc_2fa_nonce')
-		]);
-
-		wp_enqueue_script( 'two-factor-woo' );
-	}
 
 	public static function init()
 	{
@@ -72,64 +51,66 @@ class Plugin_Loader {
 		add_action('woocommerce_process_login_errors', [self::class,'woo_process_two_factor_login'], 999, 3);
 
 		// wordpress process two factor login
-		// HOW TO GET DEFAULT WORDPRESS LOGIN WORKING?
-		//add_filter('wp_authenticate_user', [self::class,'wp_process_2fa_login'], 10, 2);
+		add_filter('wp_authenticate_user', [self::class,'wp_process_2fa_login'], 10, 2);
 
 		// woocommerce add auth code to login form
 		add_action( 'woocommerce_login_form', [self::class,'woo_add_login_auth_code_field'] );
 
-		// woocommerce two step 2fa check
-		add_action( 'wp_ajax_nopriv_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
-		add_action( 'wp_ajax_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
+		// wordpress add auth code to login form
+		add_action( 'login_form', [self::class,'wp_add_login_auth_code_field'] );
 
 	}
 
 	// wordpress process two factor login
-	// HOW TO GET THIS WORKING? ALWAYS THROWS INVALID AUTH CODE
 	public static function wp_process_2fa_login($user, $password)
 	{
-		// Only process on WooCommerce login form
-		if (!defined('WC_DOING_FRONTEND_LOGIN')) {
-			if (isset($_POST['login']) && !is_admin() && !defined('DOING_AJAX')) {
-				define('WC_DOING_FRONTEND_LOGIN', true);
-			}
-		}
-
-		if (!defined('WC_DOING_FRONTEND_LOGIN') || !isset($_POST['authcode']))
+		// Skip if this is not a valid user object
+		if (is_wp_error($user) || !$user || !isset($user->ID)) {
 			return $user;
-
-		// 2FA required for this user?
-		if (class_exists('Two_Factor_Core') && Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-			$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
-			//$code = isset($_POST['authcode']) ? trim($_POST['authcode']) : '';
-			if ($provider || !$provider->validate_authentication($user)) {
-				// This will trigger WooCommerce login error
-				return new WP_Error('two_factor', __('Invalid authentication code2.', 'your-textdomain'));
-        		}
 		}
+
+		// Skip if we're in admin area or doing AJAX
+		if (is_admin() || defined('DOING_AJAX')) {
+			return $user;
+		}
+
+		// Check if user has 2FA enabled
+		if (!class_exists('Two_Factor_Core') || !Two_Factor_Core::is_user_using_two_factor($user->ID)) {
+			// User doesn't have 2FA enabled, proceed with normal login
+			return $user;
+		}
+
+		// User has 2FA enabled, validate the authentication code
+		$authcode = isset($_POST['authcode']) ? trim($_POST['authcode']) : '';
+		if (empty($authcode)) {
+			return new WP_Error('two_factor', __('Authentication code is required for your account.', 'your-textdomain'));
+		}
+
+		$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
+		if (!$provider) {
+			return new WP_Error('two_factor', __('No two-factor authentication provider configured.', 'your-textdomain'));
+		}
+
+		if (!$provider->validate_authentication($user)) {
+			return new WP_Error('two_factor', __('Invalid authentication code.', 'your-textdomain'));
+		}
+
 		return $user;
 	}
 
-	// woocommerce two step 2fa check
+	// wordpress add auth code to login form
 
-	public static function woo_login_2fa_check()
+	public static function wp_add_login_auth_code_field()
 	{
-		$username = $_POST['username'] ?? '';
-		$password = $_POST['password'] ?? '';
-
-		$user = wp_authenticate($username, $password);
-		if (is_wp_error($user)) {
-			//this will cause js to do a regular submit form
-			wp_send_json(['success' => false, 'message' => 'Invalid credentials']);
-		}
-
-		if (Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-			wp_send_json(['two_factor_required' => true]);
-		}
-
-		// If no 2FA, allow login (handle yourself or let WC process)
-		wp_send_json(['success' => true, 'redirect' => wc_get_page_permalink('myaccount')]);
+		?>
+			<p>
+				<label for="authcode"><?php _e('Authentication Code (if enabled)', 'your-textdomain'); ?></label>
+				<input type="text" name="authcode" id="authcode" class="input" autocomplete="off" pattern="[0-9 ]*" inputmode="numeric" placeholder="eg. 123456" />
+			</p>
+		<?php
 	}
+
+
 
 	// woocommerce add auth code to login form
 
@@ -140,8 +121,8 @@ class Plugin_Loader {
 			return;
 
 		?>
-			<div id="two-factor-2fa-wrap" style="display:none;">
-				<label for=authcode"><?php _e('Authentication Code', 'your-textdomain'); ?></label>
+			<div id="two-factor-2fa-wrap">
+				<label for="authcode"><?php _e('Authentication Code (if enabled)', 'your-textdomain'); ?></label>
 				<input type="text" name="authcode" id="authcode" autocomplete="off" pattern="[0-9 ]*" inputmode="numeric" placeholder="eg. 123456" class="input" />
 				<span class="two-factor-error" style="display:none;color:red;"></span>
 			</div>
@@ -152,21 +133,34 @@ class Plugin_Loader {
 
 	public static function woo_process_two_factor_login($errors, $username, $password)
 	{
-		if (!empty($_POST['authcode'])) {
-        		$user = get_user_by('login', $username);
-			if ($user && Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-				$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
-				if ($provider && !$provider->validate_authentication($user)) {
-					$errors->add('two_factor', __('Invalid authentication code.', 'your-textdomain'));
-				}
-			}
+		$user = get_user_by('login', $username);
+		if (!$user) {
+			return $errors; // User doesn't exist, let WooCommerce handle it
 		}
-		else
-		{
-			// when javascript not loaded this makes sure to throw error
-			// else user is logged in without auth code!
-			$errors->add('two_factor', __('No authentication code.', 'your-textdomain'));
+
+		// Check if user has 2FA enabled
+		if (!class_exists('Two_Factor_Core') || !Two_Factor_Core::is_user_using_two_factor($user->ID)) {
+			// User doesn't have 2FA enabled, proceed with normal login
+			return $errors;
 		}
+
+		// User has 2FA enabled, validate the authentication code
+		$authcode = isset($_POST['authcode']) ? trim($_POST['authcode']) : '';
+		if (empty($authcode)) {
+			$errors->add('two_factor', __('Authentication code is required for your account.', 'your-textdomain'));
+			return $errors;
+		}
+
+		$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
+		if (!$provider) {
+			$errors->add('two_factor', __('No two-factor authentication provider configured.', 'your-textdomain'));
+			return $errors;
+		}
+
+		if (!$provider->validate_authentication($user)) {
+			$errors->add('two_factor', __('Invalid authentication code.', 'your-textdomain'));
+		}
+
 		return $errors;
 	}
 
