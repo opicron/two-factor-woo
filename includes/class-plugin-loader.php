@@ -140,12 +140,19 @@ class Plugin_Loader {
 			return;
 
 		?>
+			<p id="two-factor-2fa-wrap" style="display:none;" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
+				<label for="authcode">Authcode&nbsp;<span class="required" aria-hidden="true">*</span><span class="screen-reader-text">Required</span></label>
+				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="off" value="" required="" aria-required="true" inputmode="numeric" placeholder="eg. 123456" pattern="[0-9 ]*">
+			</p>
+		<?php
+			//old div
+			/*
 			<div id="two-factor-2fa-wrap" style="display:none;">
 				<label for=authcode"><?php _e('Authentication Code', 'your-textdomain'); ?></label>
 				<input type="text" name="authcode" id="authcode" autocomplete="off" pattern="[0-9 ]*" inputmode="numeric" placeholder="eg. 123456" class="input" />
 				<span class="two-factor-error" style="display:none;color:red;"></span>
 			</div>
-		<?php
+			*/
 	}
 
 	// woocommerce process two factor login
