@@ -62,7 +62,7 @@ The **My Account → 2FA Authentication** page renders the Two Factor plugin's o
 
 ## Security notes
 
-- The AJAX pre-check endpoint uses rate limiting (transient-based) to limit credential stuffing. It also avoids credential enumeration: the response does not distinguish between wrong credentials and a valid account without 2FA.
+- The AJAX pre-check endpoint only looks up whether the submitted username has 2FA enabled — it does not validate the password. Credential validation happens once, in the real WooCommerce form submission, which is protected by WordPress's standard `authenticate` filter chain (and any brute-force protection plugin installed on the site).
 - The settings save action is protected by a WordPress nonce and the Two Factor `current_user_can_update_two_factor_options()` check.
 - The revalidation AJAX action requires a logged-in session and a nonce.
 - Enabling or disabling a 2FA provider destroys all other active sessions for that user.
