@@ -160,11 +160,17 @@ class Plugin_Loader {
 	public static function woo_process_two_factor_login($errors, $username, $password)
 	{
 		if (!empty($_POST['authcode'])) {
-        		$user = get_user_by('login', $username);
+			$user = get_user_by('login', $username);
 			if ($user && Two_Factor_Core::is_user_using_two_factor($user->ID)) {
 				$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
 				if ($provider && !$provider->validate_authentication($user)) {
 					$errors->add('two_factor', __('Invalid authentication code.', 'your-textdomain'));
+				} else {
+					// 2FA validated — prevent Two_Factor_Core from suppressing cookies
+					// (filter_authenticate at priority 31) and redirecting to its own page
+					// (wp_login at PHP_INT_MAX), since we already handled authentication.
+					remove_filter('authenticate', ['Two_Factor_Core', 'filter_authenticate'], 31);
+					remove_action('wp_login', ['Two_Factor_Core', 'wp_login'], PHP_INT_MAX);
 				}
 			}
 		}
