@@ -49,6 +49,11 @@ document.addEventListener('DOMContentLoaded', function()
 	var twofaWrap = document.getElementById('two-factor-2fa-wrap');
 	var submitBtn = form.querySelector('button[type=submit]');
 
+	// Hide the authcode field by default when JS is available; it is shown only
+	// after the AJAX pre-check confirms 2FA is required for this account.
+	// Without JS the field stays visible so no-JS users with 2FA can still log in.
+	twofaWrap.style.display = 'none';
+
 	form.addEventListener('submit', function handler(e){
 		if (twofaWrap.style.display === 'none') {
 			// Check for empty fields first
