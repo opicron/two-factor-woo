@@ -82,6 +82,10 @@ class Plugin_Loader {
 		add_action( 'wp_ajax_nopriv_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
 		add_action( 'wp_ajax_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
 
+		// 1) Add 2FA field into Blocksy login modal (core WP login form)
+		//add_action('login_form_middle', [self::class,'woo_add_login_auth_code_field_popup']);
+		//add_action('woocommerce_login_form', [self::class,'woo_add_login_auth_code_field_popup']);
+
 	}
 
 	// wordpress process two factor login
@@ -131,6 +135,24 @@ class Plugin_Loader {
 		wp_send_json(['success' => true, 'redirect' => wc_get_page_permalink('myaccount')]);
 	}
 
+	// Add 2FA field to Woo login form everywhere it's rendered (My Account, Checkout, Blocksy modal)
+	/*
+	public static function woo_add_login_auth_code_field_popup()
+	{
+		if ( is_account_page() && is_checkout() )
+			return;
+
+	    ?>
+	    <p class="form-row form-row-wide" id="two-factor-2fa-wrap">
+	        <label for="authcode"><?php esc_html_e('Authentication Code', 'your-textdomain'); ?></label>
+	        <input type="text" name="authcode" id="authcode"
+	               autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]*">
+	        <span class="two-factor-error" style="display:none;color:red;"></span>
+	    </p>
+	    <?php
+	}
+	*/
+	
 	// woocommerce add auth code to login form
 
 	public static function woo_add_login_auth_code_field()
@@ -138,13 +160,14 @@ class Plugin_Loader {
 		//return if not account page (or checkout)
 		if ( !is_account_page() && !is_checkout() )
 			return;
-
-		?>
+		
+			?>
 			<p id="two-factor-2fa-wrap" style="display:none;" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 				<label for="authcode">Authcode&nbsp;<span class="required" aria-hidden="true">*</span><span class="screen-reader-text">Required</span></label>
 				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="off" value="" required="" aria-required="true" inputmode="numeric" placeholder="eg. 123456" pattern="[0-9 ]*">
 			</p>
-		<?php
+			<?php
+		
 			//old div
 			/*
 			<div id="two-factor-2fa-wrap" style="display:none;">
