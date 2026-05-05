@@ -127,9 +127,9 @@ class Plugin_Loader {
 			return;
 
 		?>
-			<p id="two-factor-2fa-wrap" style="display:none;" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
-				<label for="authcode">Authcode&nbsp;<span class="required" aria-hidden="true">*</span><span class="screen-reader-text">Required</span></label>
-				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="off" value="" required="" aria-required="true" inputmode="numeric" placeholder="eg. 123456" pattern="[0-9 ]*">
+			<p id="two-factor-2fa-wrap" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
+				<label for="authcode"><?php esc_html_e( 'Authentication Code', 'two-factor-woo' ); ?></label>
+				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="one-time-code" value="" inputmode="numeric" placeholder="<?php esc_attr_e( 'eg. 123456', 'two-factor-woo' ); ?>" pattern="[0-9 ]*">
 			</p>
 		<?php
 			//old div
