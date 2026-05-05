@@ -194,6 +194,18 @@ class Plugin_Loader {
 					// (wp_login at PHP_INT_MAX), since we already handled authentication.
 					remove_filter('authenticate', ['Two_Factor_Core', 'filter_authenticate'], 31);
 					remove_action('wp_login', ['Two_Factor_Core', 'wp_login'], PHP_INT_MAX);
+					
+					// Stamp the session so current_user_can_update_two_factor_options() returns
+					// true and the "Revalidate now" notice does not appear after login.
+					$provider_key = $provider ? $provider->get_key() : '';
+					add_filter( 'attach_session_information', function( $session, $user_id ) use ( $user, $provider_key ) {
+						if ( $user->ID === $user_id ) {
+							$session['two-factor-login']    = time();
+							$session['two-factor-provider'] = $provider_key;
+						}
+						return $session;
+					}, 10, 2 );
+
 				}
 			}
 		}
