@@ -35,8 +35,6 @@ class Plugin_Loader {
 			array( 'in_footer' => true )
 		);
 
-		// Localize the AJAX URL
-		// do we need to add a nonce?
 		wp_localize_script('two-factor-woo', 'WC_2FA', [
 			'ajax_url'       => admin_url('admin-ajax.php?action=wc_2fa_login_check'),
 			'revalidate_url' => admin_url('admin-ajax.php?action=wc_2fa_revalidate'),
@@ -71,10 +69,6 @@ class Plugin_Loader {
 		// woocommerce process two factor login
 		add_action('woocommerce_process_login_errors', [self::class,'woo_process_two_factor_login'], 999, 3);
 
-		// wordpress process two factor login
-		// HOW TO GET DEFAULT WORDPRESS LOGIN WORKING?
-		//add_filter('wp_authenticate_user', [self::class,'wp_process_2fa_login'], 10, 2);
-
 		// woocommerce add auth code to login form
 		add_action( 'woocommerce_login_form', [self::class,'woo_add_login_auth_code_field'] );
 
@@ -87,51 +81,41 @@ class Plugin_Loader {
 
 	}
 
-	// wordpress process two factor login
-	// HOW TO GET THIS WORKING? ALWAYS THROWS INVALID AUTH CODE
-	public static function wp_process_2fa_login($user, $password)
-	{
-		// Only process on WooCommerce login form
-		if (!defined('WC_DOING_FRONTEND_LOGIN')) {
-			if (isset($_POST['login']) && !is_admin() && !defined('DOING_AJAX')) {
-				define('WC_DOING_FRONTEND_LOGIN', true);
-			}
-		}
-
-		if (!defined('WC_DOING_FRONTEND_LOGIN') || !isset($_POST['authcode']))
-			return $user;
-
-		// 2FA required for this user?
-		if (class_exists('Two_Factor_Core') && Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-			$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
-			//$code = isset($_POST['authcode']) ? trim($_POST['authcode']) : '';
-			if ($provider || !$provider->validate_authentication($user)) {
-				// This will trigger WooCommerce login error
-				return new WP_Error('two_factor', __('Invalid authentication code2.', 'your-textdomain'));
-        		}
-		}
-		return $user;
-	}
-
 	// woocommerce two step 2fa check
 
 	public static function woo_login_2fa_check()
 	{
-		$username = $_POST['username'] ?? '';
-		$password = $_POST['password'] ?? '';
+		$ip       = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+		$username = sanitize_user( wp_unslash( $_POST['username'] ?? '' ) );
 
-		$user = wp_authenticate($username, $password);
-		if (is_wp_error($user)) {
-			//this will cause js to do a regular submit form
-			wp_send_json(['success' => false, 'message' => 'Invalid credentials']);
+		// Rate limiting: 10 attempts per IP and per username per 10 minutes.
+		$ip_key   = 'wc_2fa_rl_ip_' . md5( $ip );
+		$user_key = 'wc_2fa_rl_u_'  . md5( $username );
+
+		$ip_hits   = (int) get_transient( $ip_key );
+		$user_hits = (int) get_transient( $user_key );
+
+		if ( $ip_hits >= 10 || $user_hits >= 10 ) {
+			// Return false so the JS falls back to the normal WooCommerce form submit,
+			// where the site's brute-force protection plugin can also apply.
+			wp_send_json( ['two_factor_required' => false] );
 		}
 
-		if (Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-			wp_send_json(['two_factor_required' => true]);
+		set_transient( $ip_key,   $ip_hits   + 1, 10 * MINUTE_IN_SECONDS );
+		set_transient( $user_key, $user_hits + 1, 10 * MINUTE_IN_SECONDS );
+
+		$password = wp_unslash( $_POST['password'] ?? '' );
+		$user     = wp_authenticate( $username, $password );
+
+		// Only tell the client that 2FA is required when we know credentials are valid
+		// AND the account has 2FA enabled. For invalid credentials or accounts without
+		// 2FA we return false — the JS will resubmit the real form and WooCommerce will
+		// handle the error or complete the login, avoiding credential enumeration.
+		if ( ! is_wp_error( $user ) && Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
+			wp_send_json( ['two_factor_required' => true] );
 		}
 
-		// If no 2FA, allow login (handle yourself or let WC process)
-		wp_send_json(['success' => true, 'redirect' => wc_get_page_permalink('myaccount')]);
+		wp_send_json( ['two_factor_required' => false] );
 	}
 
 	// woocommerce add auth code to login form
@@ -162,38 +146,41 @@ class Plugin_Loader {
 
 	public static function woo_process_two_factor_login($errors, $username, $password)
 	{
-		if (!empty($_POST['authcode'])) {
-			$user = get_user_by('login', $username);
-			if ($user && Two_Factor_Core::is_user_using_two_factor($user->ID)) {
-				$provider = Two_Factor_Core::get_primary_provider_for_user($user->ID);
-				if ($provider && !$provider->validate_authentication($user)) {
-					$errors->add('two_factor', __('Invalid authentication code.', 'your-textdomain'));
-				} else {
-					// 2FA validated — prevent Two_Factor_Core from suppressing cookies
-					// (filter_authenticate at priority 31) and redirecting to its own page
-					// (wp_login at PHP_INT_MAX), since we already handled authentication.
-					remove_filter('authenticate', ['Two_Factor_Core', 'filter_authenticate'], 31);
-					remove_action('wp_login', ['Two_Factor_Core', 'wp_login'], PHP_INT_MAX);
+		$user = get_user_by( 'login', $username );
 
-					// Stamp the session so current_user_can_update_two_factor_options() returns
-					// true and the "Revalidate now" notice does not appear after login.
-					$provider_key = $provider ? $provider->get_key() : '';
-					add_filter( 'attach_session_information', function( $session, $user_id ) use ( $user, $provider_key ) {
-						if ( $user->ID === $user_id ) {
-							$session['two-factor-login']    = time();
-							$session['two-factor-provider'] = $provider_key;
-						}
-						return $session;
-					}, 10, 2 );
-				}
+		// Skip entirely for users who do not have 2FA enabled so they can
+		// still log in through the normal WooCommerce form (e.g. when JS is off).
+		if ( ! $user || ! Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
+			return $errors;
+		}
+
+		if ( ! empty( $_POST['authcode'] ) ) {
+			$provider = Two_Factor_Core::get_primary_provider_for_user( $user->ID );
+			if ( $provider && ! $provider->validate_authentication( $user ) ) {
+				$errors->add( 'two_factor', __( 'Invalid authentication code.', 'your-textdomain' ) );
+			} else {
+				// 2FA validated — prevent Two_Factor_Core from suppressing cookies
+				// (filter_authenticate at priority 31) and redirecting to its own page
+				// (wp_login at PHP_INT_MAX), since we already handled authentication.
+				remove_filter( 'authenticate', [ 'Two_Factor_Core', 'filter_authenticate' ], 31 );
+				remove_action( 'wp_login', [ 'Two_Factor_Core', 'wp_login' ], PHP_INT_MAX );
+
+				// Stamp the session so current_user_can_update_two_factor_options() returns
+				// true and the "Revalidate now" notice does not appear after login.
+				$provider_key = $provider ? $provider->get_key() : '';
+				add_filter( 'attach_session_information', function( $session, $user_id ) use ( $user, $provider_key ) {
+					if ( $user->ID === $user_id ) {
+						$session['two-factor-login']    = time();
+						$session['two-factor-provider'] = $provider_key;
+					}
+					return $session;
+				}, 10, 2 );
 			}
+		} else {
+			// User has 2FA enabled but submitted no code (JS not loaded / bypassed).
+			$errors->add( 'two_factor', __( 'No authentication code.', 'your-textdomain' ) );
 		}
-		else
-		{
-			// when javascript not loaded this makes sure to throw error
-			// else user is logged in without auth code!
-			$errors->add('two_factor', __('No authentication code.', 'your-textdomain'));
-		}
+
 		return $errors;
 	}
 
@@ -202,9 +189,14 @@ class Plugin_Loader {
 
 	public static function two_factor_remove_login_frontend($user_login, $user)
 	{
-		//only remove in frontend
-		if (!is_login())
-		{
+		// is_login() was added in WordPress 6.1; fall back to $pagenow for older versions.
+		if ( function_exists( 'is_login' ) ) {
+			$on_wp_login_page = is_login();
+		} else {
+			$on_wp_login_page = isset( $GLOBALS['pagenow'] ) && 'wp-login.php' === $GLOBALS['pagenow'];
+		}
+
+		if ( ! $on_wp_login_page ) {
 			remove_action( 'wp_login', [ 'Two_Factor_Core', 'wp_login' ], PHP_INT_MAX );
 		}
 	}
