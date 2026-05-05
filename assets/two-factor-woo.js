@@ -1,6 +1,48 @@
 
-document.addEventListener('DOMContentLoaded', function() 
+document.addEventListener('DOMContentLoaded', function()
 {
+	// Inline revalidation on my-account 2FA settings page
+	var revalidateWrap = document.getElementById('wc-2fa-revalidate-wrap');
+	if (revalidateWrap) {
+		var revalidateBtn   = document.getElementById('wc-2fa-revalidate-btn');
+		var revalidateCode  = document.getElementById('wc-2fa-revalidate-code');
+		var revalidateMsg   = document.getElementById('wc-2fa-revalidate-msg');
+		var revalidateNonce = document.getElementById('wc-2fa-revalidate-nonce');
+
+		function doRevalidate() {
+			revalidateMsg.textContent = '';
+			revalidateBtn.disabled = true;
+
+			var data = new FormData();
+			data.append('nonce', revalidateNonce.value);
+			data.append('authcode', revalidateCode.value.trim());
+
+			fetch(WC_2FA.revalidate_url, {
+				method: 'POST',
+				body: data,
+				credentials: 'same-origin'
+			})
+			.then(function(r) { return r.json(); })
+			.then(function(res) {
+				if (res.success) {
+					window.location.reload();
+				} else {
+					revalidateMsg.textContent = (res.data && res.data.message) ? res.data.message : 'Verification failed.';
+					revalidateBtn.disabled = false;
+				}
+			})
+			.catch(function() {
+				revalidateMsg.textContent = 'An error occurred. Please try again.';
+				revalidateBtn.disabled = false;
+			});
+		}
+
+		revalidateBtn.addEventListener('click', doRevalidate);
+		revalidateCode.addEventListener('keydown', function(e) {
+			if (e.key === 'Enter') doRevalidate();
+		});
+	}
+
 	var form = document.querySelector('.woocommerce-form-login');
 	if (!form) return;
 
