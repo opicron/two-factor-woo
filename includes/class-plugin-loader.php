@@ -185,7 +185,7 @@ class Plugin_Loader {
 		//only remove in frontend
 		if (!is_login())
 		{
-			remove_action( 'wp_login', [ 'Two_Factor_Core', 'wp_login' ]);
+			remove_action( 'wp_login', [ 'Two_Factor_Core', 'wp_login' ], PHP_INT_MAX );
 		}
 	}
 
