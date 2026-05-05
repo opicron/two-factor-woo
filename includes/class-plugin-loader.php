@@ -85,33 +85,13 @@ class Plugin_Loader {
 
 	public static function woo_login_2fa_check()
 	{
-		$ip       = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
 		$username = sanitize_user( wp_unslash( $_POST['username'] ?? '' ) );
 
-		// Rate limiting: 10 attempts per IP and per username per 10 minutes.
-		$ip_key   = 'wc_2fa_rl_ip_' . md5( $ip );
-		$user_key = 'wc_2fa_rl_u_'  . md5( $username );
+		// WooCommerce accepts both username and email at login.
+		$user = get_user_by( 'login', $username )
+		     ?: get_user_by( 'email', $username );
 
-		$ip_hits   = (int) get_transient( $ip_key );
-		$user_hits = (int) get_transient( $user_key );
-
-		if ( $ip_hits >= 10 || $user_hits >= 10 ) {
-			// Return false so the JS falls back to the normal WooCommerce form submit,
-			// where the site's brute-force protection plugin can also apply.
-			wp_send_json( ['two_factor_required' => false] );
-		}
-
-		set_transient( $ip_key,   $ip_hits   + 1, 10 * MINUTE_IN_SECONDS );
-		set_transient( $user_key, $user_hits + 1, 10 * MINUTE_IN_SECONDS );
-
-		$password = wp_unslash( $_POST['password'] ?? '' );
-		$user     = wp_authenticate( $username, $password );
-
-		// Only tell the client that 2FA is required when we know credentials are valid
-		// AND the account has 2FA enabled. For invalid credentials or accounts without
-		// 2FA we return false — the JS will resubmit the real form and WooCommerce will
-		// handle the error or complete the login, avoiding credential enumeration.
-		if ( ! is_wp_error( $user ) && Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
+		if ( $user && Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
 			wp_send_json( ['two_factor_required' => true] );
 		}
 
