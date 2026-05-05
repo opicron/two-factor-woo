@@ -5,8 +5,9 @@ Bridges the [Two Factor](https://wordpress.org/plugins/two-factor/) plugin with 
 ## Features
 
 - Two-step login flow on the WooCommerce login form: credentials are checked first, then the auth code field appears only for accounts that have 2FA enabled
+- **Works without JavaScript** — the auth code field is always rendered; JS progressively enhances it into a two-step flow
 - **My Account → 2FA Authentication** settings page where customers can enable, disable, and configure their preferred 2FA provider
-- Identity revalidation gate before the settings page is editable (prevents session hijacking from changing 2FA config)
+- Identity revalidation gate before the settings page is editable (prevents an unattended session from disabling 2FA)
 - Rate limiting on the AJAX pre-check endpoint (10 attempts per IP / per username per 10-minute window)
 - Accounts without 2FA enabled are unaffected and log in normally
 - Removes the FIDO U2F and Dummy providers on the frontend (admin can still use them)
@@ -32,6 +33,8 @@ No additional configuration is required.
 
 ### Login flow
 
+**With JavaScript (two-step)**
+
 ```
 Customer submits WooCommerce login form
         │
@@ -49,7 +52,9 @@ JS sends credentials to a server-side pre-check (AJAX)
                 └─ WooCommerce handles login or shows credential error
 ```
 
-If JavaScript is unavailable, users with 2FA enabled are blocked from logging in without a code. Users without 2FA enabled are unaffected and continue to log in normally.
+**Without JavaScript (single step)**
+
+The auth code field is always visible. Customers with 2FA enter their username, password, and auth code together in one submit. PHP validates the code and either allows or rejects the login. Customers without 2FA leave the field blank and log in as normal.
 
 ### Settings page
 
