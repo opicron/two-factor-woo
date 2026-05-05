@@ -8,7 +8,6 @@ Bridges the [Two Factor](https://wordpress.org/plugins/two-factor/) plugin with 
 - **Works without JavaScript** — the auth code field is always rendered; JS progressively enhances it into a two-step flow
 - **My Account → 2FA Authentication** settings page where customers can enable, disable, and configure their preferred 2FA provider
 - Identity revalidation gate before the settings page is editable (prevents an unattended session from disabling 2FA)
-- Rate limiting on the AJAX pre-check endpoint (10 attempts per IP / per username per 10-minute window)
 - Accounts without 2FA enabled are unaffected and log in normally
 - Removes the FIDO U2F and Dummy providers on the frontend (admin can still use them)
 - Compatible with TOTP (authenticator app) and Email providers
