@@ -38,8 +38,8 @@ class Plugin_Loader {
 		// Localize the AJAX URL
 		// do we need to add a nonce?
 		wp_localize_script('two-factor-woo', 'WC_2FA', [
-			'ajax_url' => admin_url('admin-ajax.php?action=wc_2fa_login_check'),
-			//'nonce'    => wp_create_nonce('wc_2fa_nonce')
+			'ajax_url'       => admin_url('admin-ajax.php?action=wc_2fa_login_check'),
+			'revalidate_url' => admin_url('admin-ajax.php?action=wc_2fa_revalidate'),
 		]);
 
 		wp_enqueue_script( 'two-factor-woo' );
@@ -82,9 +82,8 @@ class Plugin_Loader {
 		add_action( 'wp_ajax_nopriv_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
 		add_action( 'wp_ajax_wc_2fa_login_check', [self::class,'woo_login_2fa_check'] );
 
-		// 1) Add 2FA field into Blocksy login modal (core WP login form)
-		//add_action('login_form_middle', [self::class,'woo_add_login_auth_code_field_popup']);
-		//add_action('woocommerce_login_form', [self::class,'woo_add_login_auth_code_field_popup']);
+		// inline revalidation from my-account 2FA settings page
+		add_action( 'wp_ajax_wc_2fa_revalidate', [self::class,'woo_ajax_revalidate_2fa'] );
 
 	}
 
@@ -135,24 +134,6 @@ class Plugin_Loader {
 		wp_send_json(['success' => true, 'redirect' => wc_get_page_permalink('myaccount')]);
 	}
 
-	// Add 2FA field to Woo login form everywhere it's rendered (My Account, Checkout, Blocksy modal)
-	/*
-	public static function woo_add_login_auth_code_field_popup()
-	{
-		if ( is_account_page() && is_checkout() )
-			return;
-
-	    ?>
-	    <p class="form-row form-row-wide" id="two-factor-2fa-wrap">
-	        <label for="authcode"><?php esc_html_e('Authentication Code', 'your-textdomain'); ?></label>
-	        <input type="text" name="authcode" id="authcode"
-	               autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]*">
-	        <span class="two-factor-error" style="display:none;color:red;"></span>
-	    </p>
-	    <?php
-	}
-	*/
-	
 	// woocommerce add auth code to login form
 
 	public static function woo_add_login_auth_code_field()
@@ -160,14 +141,13 @@ class Plugin_Loader {
 		//return if not account page (or checkout)
 		if ( !is_account_page() && !is_checkout() )
 			return;
-		
-			?>
+
+		?>
 			<p id="two-factor-2fa-wrap" style="display:none;" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 				<label for="authcode">Authcode&nbsp;<span class="required" aria-hidden="true">*</span><span class="screen-reader-text">Required</span></label>
 				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="off" value="" required="" aria-required="true" inputmode="numeric" placeholder="eg. 123456" pattern="[0-9 ]*">
 			</p>
-			<?php
-		
+		<?php
 			//old div
 			/*
 			<div id="two-factor-2fa-wrap" style="display:none;">
@@ -194,7 +174,7 @@ class Plugin_Loader {
 					// (wp_login at PHP_INT_MAX), since we already handled authentication.
 					remove_filter('authenticate', ['Two_Factor_Core', 'filter_authenticate'], 31);
 					remove_action('wp_login', ['Two_Factor_Core', 'wp_login'], PHP_INT_MAX);
-					
+
 					// Stamp the session so current_user_can_update_two_factor_options() returns
 					// true and the "Revalidate now" notice does not appear after login.
 					$provider_key = $provider ? $provider->get_key() : '';
@@ -205,7 +185,6 @@ class Plugin_Loader {
 						}
 						return $session;
 					}, 10, 2 );
-
 				}
 			}
 		}
@@ -386,13 +365,72 @@ class Plugin_Loader {
 			return;
 		}
 
+		if ( ! Two_Factor_Core::current_user_can_update_two_factor_options() ) {
+			$nonce = wp_create_nonce( 'wc_2fa_revalidate' );
+			?>
+			<div id="wc-2fa-revalidate-wrap">
+				<p><?php esc_html_e( 'To update your Two-Factor settings, please verify your identity first.', 'your-textdomain' ); ?></p>
+				<p class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
+					<label for="wc-2fa-revalidate-code"><?php esc_html_e( 'Authentication Code', 'your-textdomain' ); ?>&nbsp;<span class="required" aria-hidden="true">*</span></label>
+					<input type="text" id="wc-2fa-revalidate-code" class="woocommerce-Input woocommerce-Input--text input-text" inputmode="numeric" pattern="[0-9 ]*" placeholder="eg. 123456" autocomplete="one-time-code">
+				</p>
+				<input type="hidden" id="wc-2fa-revalidate-nonce" value="<?php echo esc_attr( $nonce ); ?>">
+				<button id="wc-2fa-revalidate-btn" type="button" class="woocommerce-button button"><?php esc_html_e( 'Verify', 'your-textdomain' ); ?></button>
+				<p id="wc-2fa-revalidate-msg" role="alert" style="color:red;margin-top:.5em;"></p>
+			</div>
+			<?php
+			return;
+		}
+
 		echo '<form id="two-factor-form" method="post">';
 
 		wp_nonce_field( 'frontend_two_factor_update', 'frontend_two_factor_nonce' );
 		do_action('show_user_profile', $user);
 
-		echo '<button '.(!Two_Factor_Core::current_user_can_update_two_factor_options()?'disabled':'').' type="submit" class="button">' . esc_html__('Save Changes', 'your-textdomain') . '</button>';
+		echo '<button type="submit" class="button">' . esc_html__('Save Changes', 'your-textdomain') . '</button>';
 		echo '</form>';
+	}
+
+	// ajax handler: validate 2fa code and revalidate the current session
+
+	public static function woo_ajax_revalidate_2fa()
+	{
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error( ['message' => __( 'You must be logged in.', 'your-textdomain' )] );
+		}
+
+		if ( ! check_ajax_referer( 'wc_2fa_revalidate', 'nonce', false ) ) {
+			wp_send_json_error( ['message' => __( 'Security check failed.', 'your-textdomain' )] );
+		}
+
+		$user = wp_get_current_user();
+
+		if ( ! Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
+			wp_send_json_error( ['message' => __( '2FA is not enabled for your account.', 'your-textdomain' )] );
+		}
+
+		$provider = Two_Factor_Core::get_primary_provider_for_user( $user->ID );
+		if ( ! $provider ) {
+			wp_send_json_error( ['message' => __( 'No 2FA provider found.', 'your-textdomain' )] );
+		}
+
+		// Populate all provider-specific request keys from our single code field
+		// so validate_authentication() finds the code regardless of provider.
+		$code = sanitize_text_field( $_POST['authcode'] ?? '' );
+		$_REQUEST['authcode']              = $code; // TOTP
+		$_REQUEST['two-factor-email-code'] = $code; // Email
+		$_POST['authcode']                 = $code;
+
+		if ( ! $provider->validate_authentication( $user ) ) {
+			wp_send_json_error( ['message' => __( 'Invalid authentication code. Please try again.', 'your-textdomain' )] );
+		}
+
+		Two_Factor_Core::update_current_user_session( [
+			'two-factor-login'    => time(),
+			'two-factor-provider' => $provider->get_key(),
+		] );
+
+		wp_send_json_success( ['message' => __( 'Identity verified.', 'your-textdomain' )] );
 	}
 
 
