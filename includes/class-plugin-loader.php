@@ -117,7 +117,7 @@ class Plugin_Loader {
 		?>
 			<p id="two-factor-2fa-wrap" class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 				<label for="authcode"><?php esc_html_e( 'Authentication Code', 'two-factor-woo' ); ?></label>
-				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="one-time-code" value="" inputmode="numeric" placeholder="<?php esc_attr_e( 'eg. 123456', 'two-factor-woo' ); ?>" pattern="[0-9 ]*">
+				<input type="text" class="woocommerce-Input woocommerce-Input--text input-text" name="authcode" id="authcode" autocomplete="one-time-code" value="" placeholder="<?php esc_attr_e( 'eg. 123456', 'two-factor-woo' ); ?>" pattern="[0-9 ]*">
 			</p>
 		<?php
 			//old div
@@ -352,7 +352,7 @@ class Plugin_Loader {
 				<p><?php esc_html_e( 'To update your Two-Factor settings, please verify your identity first.', 'your-textdomain' ); ?></p>
 				<p class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 					<label for="wc-2fa-revalidate-code"><?php esc_html_e( 'Authentication Code', 'your-textdomain' ); ?>&nbsp;<span class="required" aria-hidden="true">*</span></label>
-					<input type="text" id="wc-2fa-revalidate-code" class="woocommerce-Input woocommerce-Input--text input-text" inputmode="numeric" pattern="[0-9 ]*" placeholder="eg. 123456" autocomplete="one-time-code">
+					<input type="text" id="wc-2fa-revalidate-code" class="woocommerce-Input woocommerce-Input--text input-text" pattern="[0-9 ]*" placeholder="eg. 123456" autocomplete="one-time-code">
 				</p>
 				<input type="hidden" id="wc-2fa-revalidate-nonce" value="<?php echo esc_attr( $nonce ); ?>">
 				<button id="wc-2fa-revalidate-btn" type="button" class="woocommerce-button button"><?php esc_html_e( 'Verify', 'your-textdomain' ); ?></button>
