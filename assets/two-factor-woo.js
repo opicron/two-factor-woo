@@ -52,10 +52,12 @@ document.addEventListener('DOMContentLoaded', function()
 	// Hide the authcode field by default when JS is available; it is shown only
 	// after the AJAX pre-check confirms 2FA is required for this account.
 	// Without JS the field stays visible so no-JS users with 2FA can still log in.
-	twofaWrap.style.display = 'none';
+	// Using a visually-hidden class (not display:none) keeps the input in the DOM
+	// so iOS AutoFill / Bitwarden can detect autocomplete="one-time-code" at page load.
+	twofaWrap.classList.add('two-fa-visually-hidden');
 
 	form.addEventListener('submit', function handler(e){
-		if (twofaWrap.style.display === 'none') {
+		if (twofaWrap.classList.contains('two-fa-visually-hidden')) {
 			// Check for empty fields first
 			var username = form.querySelector('input[name="username"]').value.trim();
 			var password = form.querySelector('input[name="password"]').value.trim();
@@ -78,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function()
 			.then(res => {
 				if (res.two_factor_required) {
 					// Show the authcode field and wait for the user to re-submit
-					twofaWrap.style.display = '';
+					twofaWrap.classList.remove('two-fa-visually-hidden');
 					twofaWrap.querySelector('input').focus();
 				} else {
 					// No 2FA needed (or rate-limited): let WooCommerce handle the real
