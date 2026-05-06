@@ -1,0 +1,13 @@
+/* Visually hides the 2FA field until needed, while keeping it in the DOM so
+   iOS AutoFill and password managers (Bitwarden etc.) can scan it at page load. */
+#two-factor-2fa-wrap.two-fa-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
