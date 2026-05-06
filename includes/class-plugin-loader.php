@@ -35,12 +35,20 @@ class Plugin_Loader {
 			array( 'in_footer' => true )
 		);
 
+		wp_register_style(
+			'two-factor-woo',
+			TWO_FACTOR_WOO_URI . '/assets/two-factor-woo.css',
+			array(),
+			filemtime( TWO_FACTOR_WOO_PATH . '/assets/two-factor-woo.css' )
+		);
+
 		wp_localize_script('two-factor-woo', 'WC_2FA', [
 			'ajax_url'       => admin_url('admin-ajax.php?action=wc_2fa_login_check'),
 			'revalidate_url' => admin_url('admin-ajax.php?action=wc_2fa_revalidate'),
 		]);
 
 		wp_enqueue_script( 'two-factor-woo' );
+		wp_enqueue_style( 'two-factor-woo' );
 	}
 
 	public static function init()
