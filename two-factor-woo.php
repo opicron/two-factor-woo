@@ -30,4 +30,13 @@ use Two_Factor_Woo\Plugin_Loader;
 
 Plugin_Loader::load();
 
+register_activation_hook( __FILE__, function() {
+	Plugin_Loader::woo_add_two_factor_endpoint();
+	flush_rewrite_rules();
+} );
+
+register_deactivation_hook( __FILE__, function() {
+	flush_rewrite_rules();
+} );
+
 ?>
