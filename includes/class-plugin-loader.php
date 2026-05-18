@@ -134,7 +134,8 @@ class Plugin_Loader {
 
 	public static function woo_process_two_factor_login($errors, $username, $password)
 	{
-		$user = get_user_by( 'login', $username );
+		$user = get_user_by( 'login', $username )
+		     ?: get_user_by( 'email', $username );
 
 		// Skip entirely for users who do not have 2FA enabled so they can
 		// still log in through the normal WooCommerce form (e.g. when JS is off).
