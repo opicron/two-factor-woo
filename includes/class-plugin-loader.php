@@ -93,6 +93,8 @@ class Plugin_Loader {
 
 	public static function woo_login_2fa_check()
 	{
+		nocache_headers();
+		
 		$username = sanitize_user( wp_unslash( $_POST['username'] ?? '' ) );
 
 		// WooCommerce accepts both username and email at login.
